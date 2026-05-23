@@ -23,16 +23,30 @@ pub fn run() {
                 .map(|p| p.join("backend"))
                 .unwrap_or_else(|| std::path::PathBuf::from("../backend"));
 
-            let child = shell
+            let (mut rx, child) = shell
                 .command("python")
                 .args(["-m", "src.main"])
                 .current_dir(&backend_dir)
                 .spawn()
                 .expect("Failed to start Python backend sidecar");
 
-            log::info!("Python sidecar started with PID: {:?}", child.pid());
+            log::info!("Python sidecar started");
             app.manage(SidecarState {
                 child: Mutex::new(Some(child)),
+            });
+
+            tauri::async_runtime::spawn(async move {
+                while let Some(event) = rx.recv().await {
+                    match event {
+                        tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                            log::info!("[python] {}", String::from_utf8_lossy(&line));
+                        }
+                        tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                            log::warn!("[python:err] {}", String::from_utf8_lossy(&line));
+                        }
+                        _ => {}
+                    }
+                }
             });
 
             Ok(())

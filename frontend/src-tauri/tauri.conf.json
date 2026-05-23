@@ -33,6 +33,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English", "Spanish"]
+      },
+      "wix": {
+        "language": "en-US"
+      }
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }
