@@ -52,6 +52,14 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
 
             if msg_type == "pong":
                 continue
+            elif msg_type == "chat":
+                text = data.get("text", "")
+                try:
+                    async for event in agent.process_message(text):
+                        if event["type"] in ("token", "tool_use", "done", "error"):
+                            await ws.send_json(event)
+                except ValueError as e:
+                    await ws.send_json({"type": "error", "data": str(e)})
             elif msg_type == "command":
                 req_id = data.get("id", str(uuid.uuid4()))
                 result = await agent.handle_message(data)
