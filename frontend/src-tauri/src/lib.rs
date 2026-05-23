@@ -17,11 +17,19 @@ pub fn run() {
         )
         .setup(|app| {
             let shell = app.shell();
-            let backend_dir = std::env::current_dir()
-                .unwrap_or_default()
-                .parent()
-                .map(|p| p.join("backend"))
-                .unwrap_or_else(|| std::path::PathBuf::from("../backend"));
+
+            let backend_dir = if cfg!(debug_assertions) {
+                std::env::current_dir()
+                    .unwrap_or_default()
+                    .parent()
+                    .map(|p| p.join("backend"))
+                    .unwrap_or_else(|| std::path::PathBuf::from("../backend"))
+            } else {
+                app.path()
+                    .resource_dir()
+                    .unwrap_or_default()
+                    .join("backend")
+            };
 
             let (mut rx, child) = shell
                 .command("python")
