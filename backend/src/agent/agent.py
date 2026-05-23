@@ -9,6 +9,7 @@ from src.agent.memory_provider import BuiltinMemoryProvider, MemoryProvider
 from src.agent.tool_registry import ToolRegistry
 from src.agent.tools.echo import handle_echo
 from src.agent.tools.file_ops import list_directory, read_file, write_file
+from src.research.synthesis import deep_research
 
 MAX_TOOL_ITERATIONS = 5
 
@@ -28,6 +29,7 @@ class NeuroAgent:
         self.registry.register("read_file", self._file_handler(read_file))
         self.registry.register("write_file", self._file_handler(write_file))
         self.registry.register("list_directory", self._file_handler(list_directory))
+        self.registry.register("deep_research", self._research_handler)
 
     def set_memory_provider(self, provider: MemoryProvider) -> None:
         self.memory = provider
@@ -103,3 +105,21 @@ class NeuroAgent:
             return await fn(args, vault_root=vault)
 
         return handler
+
+    async def _research_handler(self, args: dict) -> dict:
+        query = args.get("query", "")
+        depth = args.get("depth", "standard")
+        if not query:
+            return {"ok": False, "error": "Missing 'query' for deep_research"}
+
+        chat_fn = self.llm.chat if hasattr(self, "llm") else None
+        brief = await deep_research(query, llm_chat=chat_fn, depth=depth)
+        return {
+            "ok": True,
+            "data": {
+                "question": brief.question,
+                "summary": brief.summary,
+                "papers_found": len(brief.papers),
+                "references": brief.references[:10],
+            },
+        }
