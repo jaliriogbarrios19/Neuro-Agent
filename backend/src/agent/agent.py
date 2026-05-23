@@ -10,6 +10,7 @@ from src.agent.tool_registry import ToolRegistry
 from src.agent.tools.echo import handle_echo
 from src.agent.tools.file_ops import list_directory, read_file, write_file
 from src.research.synthesis import deep_research
+from src.transcription.provider import create_transcription_provider
 
 MAX_TOOL_ITERATIONS = 5
 
@@ -30,6 +31,7 @@ class NeuroAgent:
         self.registry.register("write_file", self._file_handler(write_file))
         self.registry.register("list_directory", self._file_handler(list_directory))
         self.registry.register("deep_research", self._research_handler)
+        self.registry.register("transcribe_audio", self._transcription_handler)
 
     def set_memory_provider(self, provider: MemoryProvider) -> None:
         self.memory = provider
@@ -121,5 +123,23 @@ class NeuroAgent:
                 "summary": brief.summary,
                 "papers_found": len(brief.papers),
                 "references": brief.references[:10],
+            },
+        }
+
+    async def _transcription_handler(self, args: dict) -> dict:
+        file_path = args.get("file_path", "")
+        language = args.get("language", "en")
+        if not file_path:
+            return {"ok": False, "error": "Missing 'file_path' for transcribe_audio"}
+
+        provider = create_transcription_provider()
+        transcript = await provider.transcribe(file_path, language)
+        return {
+            "ok": True,
+            "data": {
+                "text": transcript.text,
+                "utterances": [{"speaker": u.speaker, "text": u.text, "start": u.start, "end": u.end} for u in transcript.utterances],
+                "language": transcript.language,
+                "provider": transcript.provider,
             },
         }
