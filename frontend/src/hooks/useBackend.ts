@@ -52,11 +52,19 @@ export function useBackend(): UseBackendResult {
 
     ws.onclose = () => {
       setStatus("disconnected")
+      for (const [, pending] of pendingRef.current) {
+        pending.reject(new Error("Connection closed"))
+      }
+      pendingRef.current.clear()
       setTimeout(() => connectRef.current?.(), 1000)
     }
 
     ws.onerror = () => {
       setStatus("error")
+      for (const [, pending] of pendingRef.current) {
+        pending.reject(new Error("Connection error"))
+      }
+      pendingRef.current.clear()
       ws.close()
     }
 

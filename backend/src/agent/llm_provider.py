@@ -41,30 +41,30 @@ class OpenAICompatibleProvider(LLMProvider):
 
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
-        kwargs: dict = {"model": self.model, "messages": messages, "stream": True}
-        if tools:
-            kwargs["tools"] = tools
+        async with AsyncOpenAI(api_key=self.api_key, base_url=self.base_url) as client:
+            kwargs: dict = {"model": self.model, "messages": messages, "stream": True}
+            if tools:
+                kwargs["tools"] = tools
 
-        stream = await client.chat.completions.create(**kwargs)
+            stream = await client.chat.completions.create(**kwargs)
 
-        current_tool_call = None
-        async for chunk in stream:
-            delta = chunk.choices[0].delta if chunk.choices else None
-            if delta is None:
-                continue
-            if delta.tool_calls:
-                for tc in delta.tool_calls:
-                    if tc.id:
-                        current_tool_call = {"id": tc.id, "name": tc.function.name or "", "args": ""}
-                    if tc.function and tc.function.arguments and current_tool_call:
-                        current_tool_call["args"] += tc.function.arguments
-            if delta.content:
-                yield {"type": "token", "data": delta.content}
+            current_tool_call = None
+            async for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta is None:
+                    continue
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        if tc.id:
+                            current_tool_call = {"id": tc.id, "name": tc.function.name or "", "args": ""}
+                        if tc.function and tc.function.arguments and current_tool_call:
+                            current_tool_call["args"] += tc.function.arguments
+                if delta.content:
+                    yield {"type": "token", "data": delta.content}
 
-        if current_tool_call:
-            yield {"type": "tool_call", **current_tool_call}
-        yield {"type": "done"}
+            if current_tool_call:
+                yield {"type": "tool_call", **current_tool_call}
+            yield {"type": "done"}
 
 
 class OpenAIProvider(OpenAICompatibleProvider):

@@ -58,13 +58,20 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
                     async for event in agent.process_message(text):
                         if event["type"] in ("token", "tool_use", "done", "error"):
                             await ws.send_json(event)
-                except ValueError as e:
+                except WebSocketDisconnect:
+                    raise
+                except Exception as e:
                     await ws.send_json({"type": "error", "data": str(e)})
             elif msg_type == "command":
                 req_id = data.get("id", str(uuid.uuid4()))
-                result = await agent.handle_message(data)
-                result["id"] = req_id
-                await ws.send_json({"type": "result", **result})
+                try:
+                    result = await agent.handle_message(data)
+                    result["id"] = req_id
+                    await ws.send_json({"type": "result", **result})
+                except WebSocketDisconnect:
+                    raise
+                except Exception as e:
+                    await ws.send_json({"type": "error", "id": req_id, "data": str(e)})
     except WebSocketDisconnect:
         pass
     finally:

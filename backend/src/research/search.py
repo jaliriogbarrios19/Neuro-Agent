@@ -138,7 +138,7 @@ async def search_pubmed(query: str, max_results: int = 10) -> list[Paper]:
             authors=[a.get("name", "") for a in info.get("authors", [])],
             year=str(info.get("pubdate", ""))[:4],
             abstract="",
-            doi=f"10.0000/pubmed.{pid}",
+            doi="",
             url=f"https://pubmed.ncbi.nlm.nih.gov/{pid}/",
             source="pubmed",
         ))

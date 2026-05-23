@@ -76,7 +76,7 @@ describe("useBackend", () => {
     vi.useRealTimers()
   })
 
-  it("sends command messages via send", () => {
+  it("sends command messages via send", async () => {
     const { result } = renderHook(() => useBackend())
     act(() => {
       mockWs.onopen?.()
@@ -87,11 +87,20 @@ describe("useBackend", () => {
       )
     })
     mockWs.readyState = WebSocket.OPEN
-    result.current.send("echo", { text: "hello" })
+    const promise = result.current.send("echo", { text: "hello" })
     expect(mockWs.sentMessages.length).toBe(1)
     const parsed = JSON.parse(mockWs.sentMessages[0])
     expect(parsed.type).toBe("command")
     expect(parsed.tool).toBe("echo")
     expect(parsed.args).toEqual({ text: "hello" })
+    // Resolve pending promise before unmount to avoid unhandled rejection
+    act(() => {
+      mockWs.onmessage?.(
+        new MessageEvent("message", {
+          data: JSON.stringify({ type: "result", id: parsed.id, ok: true, data: "hello" }),
+        }),
+      )
+    })
+    await expect(promise).resolves.toBe("hello")
   })
 })
