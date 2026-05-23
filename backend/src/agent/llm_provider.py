@@ -1,4 +1,4 @@
-"""LLM Provider abstraction — OpenAI and Anthropic adapters with streaming."""
+"""LLM Provider abstraction — OpenAI, Anthropic, DeepSeek, Mistral, Qwen, OpenRouter."""
 
 import json
 import os
@@ -7,11 +7,14 @@ from typing import AsyncGenerator
 
 from dotenv import load_dotenv
 
+from src.agent.models import DEEPSEEK_MODELS, MISTRAL_MODELS, QWEN_MODELS, MIMO_MODELS
+
 load_dotenv()
 
 
 class LLMProvider(ABC):
     name: str
+    models: list[str] = []
 
     @abstractmethod
     async def chat(
@@ -20,27 +23,26 @@ class LLMProvider(ABC):
         ...
 
 
-class OpenAIProvider(LLMProvider):
-    name = "openai"
+class OpenAICompatibleProvider(LLMProvider):
+    """Base for providers using OpenAI-compatible API. Override base_url + env_prefix."""
+
+    base_url: str = ""
+    env_prefix: str = ""
 
     def __init__(self):
-        self.api_key = os.getenv("OPENAI_API_KEY", "")
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+        self.api_key = os.getenv(f"{self.env_prefix}_API_KEY", "")
+        self.model = os.getenv(f"{self.env_prefix}_MODEL", self.models[0] if self.models else "")
 
     async def chat(
         self, messages: list[dict], tools: list[dict] | None = None
     ) -> AsyncGenerator[dict, None]:
         if not self.api_key:
-            raise ValueError("OPENAI_API_KEY not configured")
+            raise ValueError(f"{self.env_prefix}_API_KEY not configured")
 
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=self.api_key)
-        kwargs: dict = {
-            "model": self.model,
-            "messages": messages,
-            "stream": True,
-        }
+        client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+        kwargs: dict = {"model": self.model, "messages": messages, "stream": True}
         if tools:
             kwargs["tools"] = tools
 
@@ -51,25 +53,58 @@ class OpenAIProvider(LLMProvider):
             delta = chunk.choices[0].delta if chunk.choices else None
             if delta is None:
                 continue
-
             if delta.tool_calls:
                 for tc in delta.tool_calls:
                     if tc.id:
                         current_tool_call = {"id": tc.id, "name": tc.function.name or "", "args": ""}
                     if tc.function and tc.function.arguments and current_tool_call:
                         current_tool_call["args"] += tc.function.arguments
-
             if delta.content:
                 yield {"type": "token", "data": delta.content}
 
         if current_tool_call:
             yield {"type": "tool_call", **current_tool_call}
-
         yield {"type": "done"}
+
+
+class OpenAIProvider(OpenAICompatibleProvider):
+    name = "openai"
+    base_url = "https://api.openai.com/v1"
+    env_prefix = "OPENAI"
+    models = []  # No hardcoded list — use OPENAI_MODEL env var
+
+
+class DeepSeekProvider(OpenAICompatibleProvider):
+    name = "deepseek"
+    base_url = "https://api.deepseek.com"
+    env_prefix = "DEEPSEEK"
+    models = DEEPSEEK_MODELS
+
+
+class MistralProvider(OpenAICompatibleProvider):
+    name = "mistral"
+    base_url = "https://api.mistral.ai/v1"
+    env_prefix = "MISTRAL"
+    models = MISTRAL_MODELS
+
+
+class QwenProvider(OpenAICompatibleProvider):
+    name = "qwen"
+    base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    env_prefix = "QWEN"
+    models = QWEN_MODELS + MIMO_MODELS
+
+
+class OpenRouterProvider(OpenAICompatibleProvider):
+    name = "openrouter"
+    base_url = "https://openrouter.ai/api/v1"
+    env_prefix = "OPENROUTER"
+    models = []  # Dynamically fetched
 
 
 class AnthropicProvider(LLMProvider):
     name = "anthropic"
+    models = []
 
     def __init__(self):
         self.api_key = os.getenv("ANTHROPIC_API_KEY", "")
@@ -93,48 +128,41 @@ class AnthropicProvider(LLMProvider):
             else:
                 filtered.append(m)
 
-        kwargs: dict = {
-            "model": self.model,
-            "max_tokens": 4096,
-            "messages": filtered,
-            "stream": True,
-        }
+        kwargs: dict = {"model": self.model, "max_tokens": 4096, "messages": filtered, "stream": True}
         if system:
             kwargs["system"] = system
 
-        anthropic_tools = None
         if tools:
-            anthropic_tools = [
+            kwargs["tools"] = [
                 {"name": t["function"]["name"], "description": t["function"].get("description", ""),
                  "input_schema": t["function"]["parameters"]}
                 for t in tools
             ]
-            kwargs["tools"] = anthropic_tools
 
         async with client.messages.stream(**kwargs) as stream:
             async for event in stream:
                 if event.type == "content_block_delta":
                     if event.delta.type == "text_delta":
                         yield {"type": "token", "data": event.delta.text}
-                    elif event.delta.type == "input_json_delta":
-                        pass  # accumulated in content_block_stop
                 elif event.type == "content_block_stop":
                     if hasattr(event, "content_block") and event.content_block.type == "tool_use":
                         cb = event.content_block
                         yield {"type": "tool_call", "id": cb.id, "name": cb.name, "args": json.dumps(cb.input)}
 
-            final = await stream.get_final_message()
-            for block in final.content:
-                if block.type == "tool_use" and not any(
-                    True for _ in []  # already yielded via content_block_stop
-                ):
-                    pass
-
         yield {"type": "done"}
 
 
+_PROVIDER_MAP: dict[str, type[LLMProvider]] = {
+    "openai": OpenAIProvider,
+    "deepseek": DeepSeekProvider,
+    "mistral": MistralProvider,
+    "qwen": QwenProvider,
+    "openrouter": OpenRouterProvider,
+    "anthropic": AnthropicProvider,
+}
+
+
 def create_provider() -> LLMProvider:
-    name = os.getenv("NEURO_PROVIDER", "openai").strip().lower()
-    if name == "anthropic":
-        return AnthropicProvider()
-    return OpenAIProvider()
+    name = os.getenv("NEURO_PROVIDER", "deepseek").strip().lower()
+    cls = _PROVIDER_MAP.get(name, DeepSeekProvider)
+    return cls()
