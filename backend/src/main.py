@@ -52,6 +52,13 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
 
             if msg_type == "pong":
                 continue
+            elif msg_type == "config":
+                provider = data.get("provider", "")
+                api_key = data.get("api_key", "")
+                model = data.get("model", "")
+                if provider:
+                    agent.reconfigure(provider, api_key, model)
+                    await ws.send_json({"type": "config_ok", "provider": provider})
             elif msg_type == "chat":
                 text = data.get("text", "")
                 try:

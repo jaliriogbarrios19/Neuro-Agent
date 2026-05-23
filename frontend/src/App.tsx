@@ -5,36 +5,40 @@ import Sidebar from "./components/Sidebar"
 import FileTree from "./components/FileTree"
 import NoteEditor from "./components/NoteEditor"
 import SlideEditor from "./components/SlideEditor"
+import Chat from "./components/Chat"
+import Transcription from "./components/Transcription"
 import Settings from "./components/Settings"
 
-type View = "notes" | "slides"
+type ViewType = "notes" | "slides" | "chat" | "transcription"
 
 function App() {
   const { status } = useBackend()
   const { theme, setTheme } = useTheme()
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
-  const [view, setView] = useState<View>("notes")
+  const [view, setView] = useState<ViewType>("notes")
   const [showSettings, setShowSettings] = useState(false)
 
   return (
     <div className="flex h-screen w-screen" style={{ background: "var(--bg-primary)" }}>
-      <Sidebar status={status} onRefresh={() => window.location.reload()} />
-      <FileTree onSelect={(path) => { setSelectedFile(path); setView("notes") }} />
+      <Sidebar
+        status={status}
+        activeView={view}
+        onViewChange={(v) => setView(v)}
+        onRefresh={() => window.location.reload()}
+      />
+
+      {view === "notes" && (
+        <FileTree onSelect={(path) => setSelectedFile(path)} />
+      )}
+
       <div className="flex-1 flex flex-col">
         <div className="flex items-center px-4 py-1.5 border-b gap-3" style={{ borderColor: "var(--border)" }}>
-          <button onClick={() => setView("notes")}
-            className="text-xs px-3 py-1 rounded-md font-medium"
-            style={{ background: view === "notes" ? "var(--accent)" : "var(--bg-tertiary)", color: view === "notes" ? "#fff" : "var(--text-primary)" }}>
-            📝 Notes
-          </button>
-          <button onClick={() => setView("slides")}
-            className="text-xs px-3 py-1 rounded-md font-medium"
-            style={{ background: view === "slides" ? "var(--accent)" : "var(--bg-tertiary)", color: view === "slides" ? "#fff" : "var(--text-primary)" }}>
-            📊 Slides
-          </button>
+          <span className="text-xs font-medium" style={{ color: "var(--accent-2)" }}>
+            {view === "notes" ? "📝 Notes" : view === "slides" ? "📊 Slides" : view === "chat" ? "💬 Chat" : "🎙️ Transcribe"}
+          </span>
           <div className="flex-1" />
           <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            {status === "connected" ? "🟢 Connected" : status === "connecting" ? "🟡 Connecting" : "🔴 Offline"}
+            {status === "connected" ? "🟢" : status === "connecting" ? "🟡" : "🔴"}
           </span>
           <button onClick={() => setShowSettings(true)} className="w-6 h-6 rounded flex items-center justify-center" title="Settings">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -43,11 +47,10 @@ function App() {
           </button>
         </div>
 
-        {view === "notes" ? (
-          <NoteEditor filePath={selectedFile} />
-        ) : (
-          <SlideEditor />
-        )}
+        {view === "notes" && <NoteEditor filePath={selectedFile} />}
+        {view === "slides" && <SlideEditor />}
+        {view === "chat" && <Chat />}
+        {view === "transcription" && <Transcription />}
       </div>
 
       {showSettings && (

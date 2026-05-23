@@ -4,7 +4,7 @@ import json
 import os
 from typing import AsyncGenerator
 
-from src.agent.llm_provider import LLMProvider, create_provider
+from src.agent.llm_provider import LLMProvider, create_provider, OpenAIProvider, _PROVIDER_MAP
 from src.agent.memory_provider import BuiltinMemoryProvider, MemoryProvider
 from src.agent.tool_registry import ToolRegistry
 from src.agent.tools.echo import handle_echo
@@ -35,6 +35,14 @@ class NeuroAgent:
 
     def set_memory_provider(self, provider: MemoryProvider) -> None:
         self.memory = provider
+
+    def reconfigure(self, provider_name: str, api_key: str = "", model: str = "") -> None:
+        cls = _PROVIDER_MAP.get(provider_name.lower().strip(), OpenAIProvider)
+        self.llm = cls()
+        if api_key and hasattr(self.llm, "api_key"):
+            self.llm.api_key = api_key
+        if model and hasattr(self.llm, "model"):
+            self.llm.model = model
 
     def get_tool_schemas(self) -> list[dict]:
         schemas = []
