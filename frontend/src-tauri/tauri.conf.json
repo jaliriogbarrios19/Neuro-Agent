@@ -26,10 +26,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "resources": {
-      "../../backend/src": "backend/src",
-      "../../backend/.env.example": "backend/.env.example"
-    },
+    "externalBin": [
+      "binaries/neuro-agent-backend"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

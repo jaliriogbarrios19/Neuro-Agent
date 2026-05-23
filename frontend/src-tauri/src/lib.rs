@@ -18,27 +18,13 @@ pub fn run() {
         .setup(|app| {
             let shell = app.shell();
 
-            let backend_dir = if cfg!(debug_assertions) {
-                std::env::current_dir()
-                    .unwrap_or_default()
-                    .parent()
-                    .map(|p| p.join("backend"))
-                    .unwrap_or_else(|| std::path::PathBuf::from("../backend"))
-            } else {
-                app.path()
-                    .resource_dir()
-                    .unwrap_or_default()
-                    .join("backend")
-            };
-
             let (mut rx, child) = shell
-                .command("python")
-                .args(["-m", "src.main"])
-                .current_dir(&backend_dir)
+                .sidecar("neuro-agent-backend")
+                .expect("sidecar not found")
                 .spawn()
-                .expect("Failed to start Python backend sidecar");
+                .expect("Failed to start Neuro Agent backend");
 
-            log::info!("Python sidecar started");
+            log::info!("Neuro Agent backend started");
             app.manage(SidecarState {
                 child: Mutex::new(Some(child)),
             });
@@ -47,10 +33,10 @@ pub fn run() {
                 while let Some(event) = rx.recv().await {
                     match event {
                         tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
-                            log::info!("[python] {}", String::from_utf8_lossy(&line));
+                            log::info!("[backend] {}", String::from_utf8_lossy(&line));
                         }
                         tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
-                            log::warn!("[python:err] {}", String::from_utf8_lossy(&line));
+                            log::warn!("[backend] {}", String::from_utf8_lossy(&line));
                         }
                         _ => {}
                     }
