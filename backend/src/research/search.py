@@ -18,21 +18,15 @@ class Paper:
 
 
 async def _fetch_json(client, url: str, params: dict | None = None) -> dict:
-    import httpx
-
-    async with client as c:
-        resp = await c.get(url, params=params or {}, timeout=15)
-        resp.raise_for_status()
-        return resp.json()
+    resp = await client.get(url, params=params or {}, timeout=15)
+    resp.raise_for_status()
+    return resp.json()
 
 
 async def _fetch_xml(client, url: str, params: dict | None = None) -> str:
-    import httpx
-
-    async with client as c:
-        resp = await c.get(url, params=params or {}, timeout=15)
-        resp.raise_for_status()
-        return resp.text
+    resp = await client.get(url, params=params or {}, timeout=15)
+    resp.raise_for_status()
+    return resp.text
 
 
 async def search_semantic_scholar(query: str, max_results: int = 10) -> list[Paper]:

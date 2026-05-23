@@ -2,6 +2,11 @@ import { useState, useEffect, useRef, useCallback } from "react"
 
 type BackendStatus = "connecting" | "connected" | "disconnected" | "error"
 
+interface PendingRequest {
+  resolve: (value: unknown) => void
+  reject: (reason: Error) => void
+}
+
 interface UseBackendResult {
   status: BackendStatus
   sessionId: string | null
@@ -12,7 +17,7 @@ export function useBackend(): UseBackendResult {
   const [status, setStatus] = useState<BackendStatus>("connecting")
   const [sessionId, setSessionId] = useState<string | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
-  const pendingRef = useRef<Map<string, (value: unknown) => void>>(new Map())
+  const pendingRef = useRef<Map<string, PendingRequest>>(new Map())
   const connectRef = useRef<() => void>(null as unknown as () => void)
 
   const connect = useCallback(() => {
@@ -22,15 +27,25 @@ export function useBackend(): UseBackendResult {
     ws.onopen = () => {}
 
     ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data)
+      let msg: Record<string, unknown>
+      try {
+        msg = JSON.parse(event.data)
+      } catch {
+        return
+      }
+
       if (msg.type === "connected") {
-        setSessionId(msg.session_id)
+        setSessionId(msg.session_id as string)
         setStatus("connected")
       } else if (msg.type === "result") {
-        const resolve = pendingRef.current.get(msg.id)
-        if (resolve) {
-          pendingRef.current.delete(msg.id)
-          resolve(msg.ok ? msg.data : Promise.reject(new Error(msg.error)))
+        const pending = pendingRef.current.get(msg.id as string)
+        if (pending) {
+          pendingRef.current.delete(msg.id as string)
+          if (msg.ok) {
+            pending.resolve(msg.data)
+          } else {
+            pending.reject(new Error(msg.error as string))
+          }
         }
       }
     }
@@ -67,14 +82,15 @@ export function useBackend(): UseBackendResult {
           return
         }
         const id = crypto.randomUUID()
-        pendingRef.current.set(id, resolve)
+        pendingRef.current.set(id, { resolve, reject })
         wsRef.current.send(
           JSON.stringify({ type: "command", id, tool, args }),
         )
         setTimeout(() => {
-          if (pendingRef.current.has(id)) {
+          const pending = pendingRef.current.get(id)
+          if (pending) {
             pendingRef.current.delete(id)
-            reject(new Error("Command timed out"))
+            pending.reject(new Error("Command timed out"))
           }
         }, 10000)
       })

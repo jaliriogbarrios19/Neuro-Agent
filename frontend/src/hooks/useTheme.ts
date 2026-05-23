@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 export type Theme = "neural" | "paper" | "forest" | "ocean"
 
@@ -9,14 +9,25 @@ export const themeLabels: Record<Theme, string> = {
   ocean: "Ocean",
 }
 
+function getSavedTheme(): Theme {
+  return (localStorage.getItem("neuro-theme") as Theme) || "neural"
+}
+
+function applyTheme(t: Theme) {
+  document.documentElement.setAttribute("data-theme", t)
+  localStorage.setItem("neuro-theme", t)
+}
+
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    return (localStorage.getItem("neuro-theme") as Theme) || "neural"
-  })
+  const [theme, setThemeState] = useState<Theme>(getSavedTheme)
+
+  useEffect(() => {
+    applyTheme(theme)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
+  }, [])
 
   const setTheme = (t: Theme) => {
-    localStorage.setItem("neuro-theme", t)
-    document.documentElement.setAttribute("data-theme", t)
+    applyTheme(t)
     setThemeState(t)
   }
 

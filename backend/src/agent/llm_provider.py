@@ -121,14 +121,24 @@ class AnthropicProvider(LLMProvider):
         client = AsyncAnthropic(api_key=self.api_key)
 
         system = ""
-        filtered = []
+        anthropic_messages = []
         for m in messages:
             if m["role"] == "system":
                 system = str(m.get("content", ""))
+            elif m["role"] == "assistant" and m.get("tool_calls"):
+                blocks = []
+                if m.get("content"):
+                    blocks.append({"type": "text", "text": m["content"]})
+                for tc in m["tool_calls"]:
+                    args = json.loads(tc["function"]["arguments"]) if tc["function"]["arguments"] else {}
+                    blocks.append({"type": "tool_use", "id": tc["id"], "name": tc["function"]["name"], "input": args})
+                anthropic_messages.append({"role": "assistant", "content": blocks})
+            elif m["role"] == "tool":
+                anthropic_messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": m["tool_call_id"], "content": str(m["content"])}]})
             else:
-                filtered.append(m)
+                anthropic_messages.append(m)
 
-        kwargs: dict = {"model": self.model, "max_tokens": 4096, "messages": filtered, "stream": True}
+        kwargs: dict = {"model": self.model, "max_tokens": 4096, "messages": anthropic_messages, "stream": True}
         if system:
             kwargs["system"] = system
 
