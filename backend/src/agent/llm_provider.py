@@ -102,6 +102,17 @@ class OpenRouterProvider(OpenAICompatibleProvider):
     models = []  # Dynamically fetched
 
 
+class OllamaProvider(OpenAICompatibleProvider):
+    name = "ollama"
+    base_url = "http://localhost:11434/v1"
+    env_prefix = "OLLAMA"
+    models = []
+
+    def __init__(self):
+        self.api_key = "ollama"  # Ollama doesn't require auth
+        self.model = os.getenv("OLLAMA_MODEL", "llama3.2")
+
+
 class AnthropicProvider(LLMProvider):
     name = "anthropic"
     models = []
@@ -168,6 +179,7 @@ _PROVIDER_MAP: dict[str, type[LLMProvider]] = {
     "mistral": MistralProvider,
     "qwen": QwenProvider,
     "openrouter": OpenRouterProvider,
+    "ollama": OllamaProvider,
     "anthropic": AnthropicProvider,
 }
 
